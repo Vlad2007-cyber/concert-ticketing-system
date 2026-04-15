@@ -4,11 +4,12 @@ using System.Text;
 
 namespace lab2OOP
 {
-    public class Computer : Entity
+    public class Computer : Entity, ISearchable
     {
         public string? Name { get; set; }
         public SystemUnit? SystemUnit { get; set; }
         public List<Device>? Devices { get; set; }
+        public DateTime CreatedAt { get; set; }
 
         public static Computer? ListHead { get; set; }
         public Computer? Next { get; set; }
@@ -20,43 +21,72 @@ namespace lab2OOP
             Name = string.Empty;
             SystemUnit = null;
             Devices = new List<Device>();
+            CreatedAt = DateTime.Now;
             Next = null;
         }
 
-        public Computer(Guid id, string name, SystemUnit? systemUnit, List<Device>? devices)
+        public Computer(Guid id, string name, SystemUnit? systemUnit, List<Device>? devices, DateTime createdAt)
             : base(id)
         {
             Name = name;
             SystemUnit = systemUnit;
             Devices = devices;
+            CreatedAt = createdAt;
             Next = null;
         }
 
-        public new bool IsValid()
+        public override bool IsValid()
         {
             return base.IsValid() &&
-                   !string.IsNullOrEmpty(Name) &&
+                   !string.IsNullOrWhiteSpace(Name) &&
                    SystemUnit != null &&
                    Devices != null &&
                    Devices.Count > 0;
         }
 
+        public bool Search(string searchText)
+        {
+            if (string.IsNullOrWhiteSpace(searchText))
+            {
+                return true;
+            }
+
+            string createdDate = CreatedAt.ToString("dd.MM.yyyy");
+            string createdTime = CreatedAt.ToString("HH:mm");
+            string createdDateTime = CreatedAt.ToString("dd.MM.yyyy HH:mm");
+
+            return (Name != null &&
+                    Name.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+                   ||
+                   (SystemUnit?.Processor != null &&
+                    SystemUnit.Processor.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+                   ||
+                   createdDate.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+                   ||
+                   createdTime.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+                   ||
+                   createdDateTime.Contains(searchText, StringComparison.OrdinalIgnoreCase);
+        }
+
         public override string Format()
         {
-            string systemUnitId = SystemUnit != null ? SystemUnit.Id.ToString() : "null";
+            string systemUnitId = SystemUnit != null
+                ? SystemUnit.Id.ToString()
+                : "null";
 
-            List<string> devicesIds = new List<string>();
+            List<string> deviceIds = new List<string>();
+
             if (Devices != null)
             {
-                foreach (var device in Devices)
+                foreach (Device device in Devices)
                 {
-                    devicesIds.Add(device.Id.ToString());
+                    deviceIds.Add(device.Id.ToString());
                 }
             }
 
-            string devicesIdsStr = string.Join(", ", devicesIds);
+            string devicesString = string.Join(", ", deviceIds);
 
-            return $"{base.Format()}[{Name}][{systemUnitId}][{devicesIdsStr}]";
+            return $"{base.Format()}[{Name}][{systemUnitId}][{devicesString}][{CreatedAt}]";
         }
 
         public override void Parse(string record)
@@ -66,9 +96,10 @@ namespace lab2OOP
                 throw new ArgumentException("Record cannot be null or empty.", nameof(record));
             }
 
-            var parts = record.Trim('[', ']').Split(new[] { "][" }, StringSplitOptions.None);
+            string[] parts = record.Trim('[', ']')
+                                   .Split(new[] { "][" }, StringSplitOptions.None);
 
-            if (parts.Length != 4)
+            if (parts.Length != 5)
             {
                 throw new FormatException("Invalid computer record format.");
             }
@@ -88,18 +119,26 @@ namespace lab2OOP
                     throw new FormatException("Invalid SystemUnit ID format.");
                 }
 
-                SystemUnit = new SystemUnit(systemUnitId, string.Empty, null, string.Empty, 0, 0);
+                SystemUnit = new SystemUnit(
+                    systemUnitId,
+                    string.Empty,
+                    null,
+                    string.Empty,
+                    0,
+                    0);
             }
 
             Devices = new List<Device>();
 
             if (!string.IsNullOrWhiteSpace(parts[3]))
             {
-                var deviceIds = parts[3].Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries);
+                string[] deviceIds = parts[3].Split(
+                    new[] { ", " },
+                    StringSplitOptions.RemoveEmptyEntries);
 
-                foreach (var deviceIdStr in deviceIds)
+                foreach (string deviceIdString in deviceIds)
                 {
-                    if (!Guid.TryParse(deviceIdStr, out Guid deviceId))
+                    if (!Guid.TryParse(deviceIdString, out Guid deviceId))
                     {
                         throw new FormatException("Invalid Device ID format.");
                     }
@@ -107,6 +146,13 @@ namespace lab2OOP
                     Devices.Add(new Device(deviceId, string.Empty, null));
                 }
             }
+
+            if (!DateTime.TryParse(parts[4], out DateTime createdAt))
+            {
+                throw new FormatException("Invalid CreatedAt format.");
+            }
+
+            CreatedAt = createdAt;
         }
 
         public static void AddToList(Computer computer)
@@ -118,6 +164,7 @@ namespace lab2OOP
             }
 
             Computer current = ListHead;
+
             while (current.Next != null)
             {
                 current = current.Next;
@@ -134,15 +181,19 @@ namespace lab2OOP
             }
 
             StringBuilder builder = new StringBuilder();
+
             Computer? current = ListHead;
-            int index = 1; while (current != null)
+            int index = 1;
+
+            while (current != null)
             {
                 builder.AppendLine(
                     $"{index}. " +
                     $"Name: {current.Name}, " +
                     $"Processor: {current.SystemUnit?.Processor}, " +
                     $"RAM: {current.SystemUnit?.RAM} GB, " +
-                    $"Storage: {current.SystemUnit?.StorageCapacity} GB");
+                    $"Storage: {current.SystemUnit?.StorageCapacity} GB, " +
+                    $"Created: {current.CreatedAt:dd.MM.yyyy HH:mm}");
 
                 current = current.Next;
                 index++;
